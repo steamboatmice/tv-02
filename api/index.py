@@ -2,10 +2,11 @@ from flask import Flask, redirect, Response, request
 import requests
 import re
 
+# Vercel'in otomatik tanıması için değişken adının 'app' olması şarttır.
 app = Flask(__name__)
 
 # --- AYARLAR ---
-TIMEOUT = 10
+TIMEOUT = 9
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://www.google.com/"
@@ -45,6 +46,7 @@ def ahaber():
 
 @app.route('/trt1')
 def trt1():
+    # TRT Tabii Linki
     link = get_stream("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", r"[\"'](https://.*?trt1.*?\.m3u8.*?)[\"']")
     return redirect(link if link else "https://tv-trt1.medya.trt.com.tr/master.m3u8", 302)
 
@@ -56,7 +58,7 @@ def star():
 # --- PLAYLIST ---
 @app.route('/playlist.m3u')
 def playlist():
-    # HTTPS düzeltmesi
+    # HTTPS düzeltmesi ve URL oluşturma
     base = request.host_url.rstrip('/').replace('http:', 'https:')
     m3u = f"""#EXTM3U
 #EXTINF:-1 group-title="Ulusal",NOW TV
@@ -76,10 +78,4 @@ def playlist():
 
 @app.route('/')
 def home():
-    return "Sunucu Aktif! Link: /playlist.m3u"
-
-# --- VERCEL İÇİN KRİTİK NOKTA ---
-# Bu fonksiyon Vercel'e "Benim uygulamam budur" der.
-# Bunu eklediğimizde 'issubclass' hatası kaybolur.
-def handler(request, *args, **kwargs):
-    return app(request, *args, **kwargs)
+    return "Sunucu Calisiyor (v2.2 Stable)! Link: /playlist.m3u"
