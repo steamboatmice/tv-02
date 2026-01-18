@@ -19,7 +19,8 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         redirect_url = None
         
-        # --- ANA KANALLAR ---
+        # --- KANAL LİNKLERİ (Hibrit Motor: Regex + Split) ---
+        
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
         elif path == '/show':
@@ -41,7 +42,7 @@ class handler(BaseHTTPRequestHandler):
         # --- TRT AİLESİ ---
 
         elif path == '/trt1':
-            redirect_url = self.get_tabii_stream(["TRT 1"])
+            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'])
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trt2':
@@ -63,11 +64,6 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/trtcocuk':
             redirect_url = self.get_tabii_stream(["TRT Çocuk"])
             if not redirect_url: redirect_url = "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
-            
-        elif path == '/trtdiyanetcocuk':
-            # Dosyada "TRT Diyanet Çocuk" olarak geçiyor.
-            redirect_url = self.get_tabii_stream(["TRT Diyanet Çocuk", "Diyanet Çocuk"])
-            if not redirect_url: redirect_url = "https://tv-trtdiyanet.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trtbelgesel':
             redirect_url = self.get_tabii_stream(["TRT Belgesel"])
@@ -80,7 +76,7 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream(["tabii Spor"])
 
-        # --- PLAYLIST ---
+        # --- OYNATMA LISTESI ---
         elif path == '/playlist.m3u':
             self.send_playlist()
             return
@@ -89,7 +85,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>EBA ve Diyanet Duzeltildi!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>Liste Hazir (Kategorisiz)!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -123,7 +119,6 @@ class handler(BaseHTTPRequestHandler):
             pass
         return None
 
-    # GÜNCELLENEN TABİİ FONKSİYONU (LİSTE DESTEKLİ)
     def get_tabii_stream(self, channel_names_list):
         try:
             url = "https://www.tabii.com/tr/watch/live/trt1?trackId=150002"
@@ -133,15 +128,15 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text
             
-            # Gönderilen isim listesindeki (örn: ["TRT EBA İlkokul", "EBA"]) her bir ismi sırayla dener.
             for name in channel_names_list:
-                parts = content.split(name)
-                if len(parts) > 1:
-                    target_area = parts[1]
-                    match = re.search(r'["\'](https?://.*?\.m3u8.*?)["\']', target_area)
-                    if match:
-                        found = match.group(1).replace('\\/', '/')
-                        return found.replace("http://", "https://")
+                if name in content:
+                    parts = content.split(name)
+                    if len(parts) > 1:
+                        target_area = parts[1]
+                        match = re.search(r'["\'](https?://.*?\.m3u8.*?)["\']', target_area[:2000])
+                        if match:
+                            found = match.group(1).replace('\\/', '/')
+                            return found.replace("http://", "https://")
         except:
             pass
         return None
@@ -151,120 +146,107 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
+        # Kategoriler (group-title) kaldirildi. Sadece isimler kaldi.
         m3u = f"""#EXTM3U
-#EXTINF:-1 group-title="Ulusal",NOW TV
+#EXTINF:-1,NOW TV
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.nowtv.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/now
 
-#EXTINF:-1 group-title="Ulusal",ATV
+#EXTINF:-1,ATV
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.atv.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/atv
 
-#EXTINF:-1 group-title="Ulusal",Show TV
+#EXTINF:-1,Show TV
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.showtv.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/show
 
-#EXTINF:-1 group-title="Ulusal",Star TV
+#EXTINF:-1,Star TV
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.startv.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/star
 
-#EXTINF:-1 group-title="Ulusal",TRT 1
+#EXTINF:-1,TRT 1
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trt1
 
-#EXTINF:-1 group-title="Ulusal",TRT 2
+#EXTINF:-1,TRT 2
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trt2
 
-#EXTINF:-1 group-title="Haber",TRT Haber
+#EXTINF:-1,TRT Haber
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trthaber
 
-#EXTINF:-1 group-title="Haber",A Haber
+#EXTINF:-1,A Haber
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.ahaber.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/ahaber
 
-#EXTINF:-1 group-title="Spor",A Spor
+#EXTINF:-1,A Spor
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.aspor.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/aspor
 
-#EXTINF:-1 group-title="Spor",TRT Spor
+#EXTINF:-1,TRT Spor
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtspor
 
-#EXTINF:-1 group-title="Spor",TRT Spor Yildiz
+#EXTINF:-1,TRT Spor Yildiz
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtsporyildiz
 
-#EXTINF:-1 group-title="Spor",tabii Spor
+#EXTINF:-1,tabii Spor
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/tabiispor
 
-#EXTINF:-1 group-title="Belgesel",TRT Belgesel
+#EXTINF:-1,TRT Belgesel
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtbelgesel
 
-#EXTINF:-1 group-title="Cocuk",TRT Cocuk
+#EXTINF:-1,TRT Cocuk
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtcocuk
 
-#EXTINF:-1 group-title="Cocuk",TRT Diyanet Cocuk
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtdiyanetcocuk
-
-#EXTINF:-1 group-title="Egitim",TRT EBA
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trteba
-
-#EXTINF:-1 group-title="Muzik",TRT Muzik
+#EXTINF:-1,TRT Muzik
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
