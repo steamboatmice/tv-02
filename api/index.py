@@ -2,7 +2,6 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 import requests
 import re
-import json
 
 # --- AYARLAR ---
 TIMEOUT = 12
@@ -20,43 +19,46 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         redirect_url = None
         
-        # --- KANAL LİNKLERİ ---
+        # --- ANA KANALLAR ---
         
-        # 1. NOW TV
+        # NOW TV
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
         
-        # 2. SHOW TV
+        # SHOW TV
         elif path == '/show':
             redirect_url = self.get_stream("https://www.showtv.com.tr/canli-yayin", "https://www.showtv.com.tr/", r"[\"'](https?://.*?showtv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://ciner-live.daioncdn.net/showtv/showtv.m3u8"
 
-        # 3. STAR TV
+        # STAR TV
         elif path == '/star':
             redirect_url = self.get_stream("https://www.startv.com.tr/canli-yayin", "https://www.startv.com.tr/", r"[\"'](https?://.*?startv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://dogus-live.daioncdn.net/startv/startv.m3u8"
 
-        # 4. ATV
+        # ATV
         elif path == '/atv':
             redirect_url = self.get_stream_multi_regex("https://www.atv.com.tr/canli-yayin", "https://www.atv.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?atv.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/atv/atv.m3u8"
 
-        # 5. A HABER
+        # A HABER
         elif path == '/ahaber':
             redirect_url = self.get_stream_multi_regex("https://www.ahaber.com.tr/video/canli-yayin", "https://www.ahaber.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?ahaber.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/ahaber/ahaber.m3u8"
 
-        # 6. A SPOR
+        # A SPOR
         elif path == '/aspor':
             redirect_url = self.get_stream_multi_regex("https://www.aspor.com.tr/webtv/canli-yayin", "https://www.aspor.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?aspor.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/aspor/aspor.m3u8"
 
-        # --- TRT AİLESİ (TABİİ ÖZEL AYRIŞTIRICI) ---
-        # Artık rastgele link değil, isme göre link çekiyoruz.
+        # --- TRT AİLESİ (TABİİ OTOMATİK TARAMA) ---
 
         elif path == '/trt1':
             redirect_url = self.get_tabii_stream("TRT 1")
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
+
+        elif path == '/trt2':
+            redirect_url = self.get_tabii_stream("TRT 2")
+            if not redirect_url: redirect_url = "https://tv-trt2.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trthaber':
             redirect_url = self.get_tabii_stream("TRT Haber")
@@ -66,15 +68,34 @@ class handler(BaseHTTPRequestHandler):
             redirect_url = self.get_tabii_stream("TRT Spor")
             if not redirect_url: redirect_url = "https://tv-trtspor1.medya.trt.com.tr/master.m3u8"
         
-        elif path == '/trtbelgesel':
-            redirect_url = self.get_tabii_stream("TRT Belgesel")
+        elif path == '/trtsporyildiz':
+            # Hem "TRT Spor Yıldız" hem "TRT Spor 2" olarak arar
+            redirect_url = self.get_tabii_stream("TRT Spor Yıldız")
+            if not redirect_url: redirect_url = self.get_tabii_stream("TRT Spor 2")
+            if not redirect_url: redirect_url = "https://tv-trtspor2.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trtcocuk':
             redirect_url = self.get_tabii_stream("TRT Çocuk")
+            if not redirect_url: redirect_url = "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
+            
+        elif path == '/trtdiyanetcocuk':
+            redirect_url = self.get_tabii_stream("TRT Diyanet Çocuk")
+            # Yedek link tahmini
+            if not redirect_url: redirect_url = "https://tv-trtdiyanet.medya.trt.com.tr/master.m3u8"
+
+        elif path == '/trtbelgesel':
+            redirect_url = self.get_tabii_stream("TRT Belgesel")
+            if not redirect_url: redirect_url = "https://tv-trtbelgesel.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trtmuzik':
             redirect_url = self.get_tabii_stream("TRT Müzik")
+            if not redirect_url: redirect_url = "https://tv-trtmuzik.medya.trt.com.tr/master.m3u8"
             
+        elif path == '/trteba':
+            # EBA genellikle İlkokul/Ortaokul diye ayrılır. Bu "TRT EBA" adını arar, ilk bulduğunu getirir.
+            redirect_url = self.get_tabii_stream("TRT EBA")
+            if not redirect_url: redirect_url = "https://tv-trtebailkokul.medya.trt.com.tr/master.m3u8"
+
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream("tabii Spor")
 
@@ -88,7 +109,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>TRT Ailesi Eklendi!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>Tum Kanallar (TRT Full + Turkuvaz) Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -104,12 +125,9 @@ class handler(BaseHTTPRequestHandler):
             self.send_error(404, "Link Bulunamadi")
 
     # --- YARDIMCI FONKSİYONLAR ---
-    
-    # 1. Standart Regex
     def get_stream(self, url, referer, regex):
         return self.get_stream_multi_regex(url, referer, [regex])
 
-    # 2. Çoklu Regex
     def get_stream_multi_regex(self, url, referer, regex_list):
         try:
             req_headers = HEADERS.copy()
@@ -120,14 +138,16 @@ class handler(BaseHTTPRequestHandler):
                 match = re.search(regex, content)
                 if match:
                     found = match.group(1).replace('\\/', '/')
-                    return found.replace("http://", "https://")
+                    if found.startswith("http://"):
+                        found = found.replace("http://", "https://")
+                    return found
         except:
             pass
         return None
 
-    # 3. TABİİ ÖZEL AYRIŞTIRICI (İsimle Kanal Bulma)
     def get_tabii_stream(self, channel_target_name):
         try:
+            # TRT 1 sayfasındaki "Tüm Kanallar" verisini kullanıyoruz
             url = "https://www.tabii.com/tr/watch/live/trt1?trackId=150002"
             req_headers = HEADERS.copy()
             req_headers['Referer'] = "https://www.tabii.com/"
@@ -135,30 +155,17 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text
             
-            # Tabii sayfasında tüm kanallar büyük bir JSON listesi içindedir.
-            # Regex ile bu listeyi buluyoruz.
-            # Genellikle: "siblings":[{...},{...}] veya "tvChannels":[{...}] formatındadır.
-            # Biz basitçe .m3u8 içeren ve hedef kanalın adının geçtiği bloğu arayacağız.
-            
-            # Pratik Çözüm: Sayfa içeriğini parçalara bölüp aradığımız kanalı bulalım.
-            # Kanal adını (örn: "TRT 1") ve ".m3u8" uzantısını yakın mesafede arıyoruz.
-            
-            # JSON verisi "videoUrl" veya "url" içinde linki tutar.
-            # Önce kanal adının geçtiği yeri bulalım
+            # Basit Mantık: Kanal adını bul (örn: "TRT Spor Yıldız") -> Sonrasındaki ilk m3u8'i al.
             parts = content.split(channel_target_name)
-            
-            # Kanal adından sonraki kısımda ilk gelen .m3u8 linkini al.
             if len(parts) > 1:
-                # Kanal isminin geçtiği yerden sonraki kısmı al (parts[1])
-                target_area = parts[1] 
-                # Bu alandaki ilk m3u8 linkini regex ile avla
+                target_area = parts[1]
+                # En yakın m3u8 linkini regex ile avla
                 match = re.search(r'["\'](https?://.*?\.m3u8.*?)["\']', target_area)
                 if match:
                     found = match.group(1).replace('\\/', '/')
                     return found.replace("http://", "https://")
 
-        except Exception as e:
-            print(f"Tabii Hatasi: {e}")
+        except:
             pass
         return None
 
@@ -167,7 +174,7 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # M3U Listesi
+        # OYNATMA LISTESI (Guncel)
         m3u = f"""#EXTM3U
 #EXTINF:-1 group-title="Ulusal",NOW TV
 #EXTVLCOPT:http-user-agent={UA_STRING}
@@ -197,6 +204,27 @@ class handler(BaseHTTPRequestHandler):
 #EXTVLCOPT:preferred-resolution=720
 {base}/star
 
+#EXTINF:-1 group-title="Ulusal",TRT 1
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trt1
+
+#EXTINF:-1 group-title="Ulusal",TRT 2
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trt2
+
+#EXTINF:-1 group-title="Haber",TRT Haber
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trthaber
+
 #EXTINF:-1 group-title="Haber",A Haber
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.ahaber.com.tr/
@@ -211,26 +239,26 @@ class handler(BaseHTTPRequestHandler):
 #EXTVLCOPT:preferred-resolution=720
 {base}/aspor
 
-#EXTINF:-1 group-title="Ulusal",TRT 1
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trt1
-
-#EXTINF:-1 group-title="Haber",TRT Haber
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trthaber
-
 #EXTINF:-1 group-title="Spor",TRT Spor
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtspor
+
+#EXTINF:-1 group-title="Spor",TRT Spor Yildiz
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trtsporyildiz
+
+#EXTINF:-1 group-title="Spor",tabii Spor
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/tabiispor
 
 #EXTINF:-1 group-title="Belgesel",TRT Belgesel
 #EXTVLCOPT:http-user-agent={UA_STRING}
@@ -246,19 +274,26 @@ class handler(BaseHTTPRequestHandler):
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtcocuk
 
+#EXTINF:-1 group-title="Cocuk",TRT Diyanet Cocuk
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trtdiyanetcocuk
+
+#EXTINF:-1 group-title="Egitim",TRT EBA
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/trteba
+
 #EXTINF:-1 group-title="Muzik",TRT Muzik
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trtmuzik
-
-#EXTINF:-1 group-title="Spor",tabii Spor
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/tabiispor
 """
         self.send_response(200)
         self.send_header('Content-type', 'audio/x-mpegurl')
