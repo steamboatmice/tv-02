@@ -19,46 +19,53 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         redirect_url = None
         
-        # --- 1. YAYIN MOTORU ---
+        # --- 1. KANAL MOTORU ---
         
+        # NOW TV
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
+        
+        # SHOW TV
         elif path == '/show':
             redirect_url = self.get_stream("https://www.showtv.com.tr/canli-yayin", "https://www.showtv.com.tr/", r"[\"'](https?://.*?showtv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://ciner-live.daioncdn.net/showtv/showtv.m3u8"
+            
+        # STAR TV
         elif path == '/star':
             redirect_url = self.get_stream("https://www.startv.com.tr/canli-yayin", "https://www.startv.com.tr/", r"[\"'](https?://.*?startv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://dogus-live.daioncdn.net/startv/startv.m3u8"
+            
+        # ATV (Regex)
         elif path == '/atv':
             redirect_url = self.get_stream_multi_regex("https://www.atv.com.tr/canli-yayin", "https://www.atv.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?atv.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/atv/atv.m3u8"
+            
+        # A HABER (Regex)
         elif path == '/ahaber':
             redirect_url = self.get_stream_multi_regex("https://www.ahaber.com.tr/video/canli-yayin", "https://www.ahaber.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?ahaber.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/ahaber/ahaber.m3u8"
+            
+        # A SPOR (Regex)
         elif path == '/aspor':
             redirect_url = self.get_stream_multi_regex("https://www.aspor.com.tr/webtv/canli-yayin", "https://www.aspor.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?aspor.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/aspor/aspor.m3u8"
 
-        # --- TRT AİLESİ ---
-
+        # --- TRT 1 (ESKİ SAĞLAM YÖNTEM) ---
         elif path == '/trt1':
-            # DÜZELTME: TRT 1 için "İsim Arama" (Tabii Stream) yerine "Direkt Link Arama" (Regex) kullanıyoruz.
-            # Bu yöntem TRT 1'in kendi sayfasında şaşmaz.
+            # TRT 1 için isim aramıyoruz, doğrudan link avlıyoruz. En garantisi bu.
             redirect_url = self.get_stream_multi_regex(
                 "https://www.tabii.com/tr/watch/live/trt1?trackId=150002", 
                 "https://www.tabii.com/", 
                 [
-                    r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']",  # İçinde trt1 geçen link
-                    r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'      # JSON hls verisi
+                    r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", 
+                    r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'
                 ]
             )
-            # Yedek
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
 
+        # --- DİĞER TRT KANALLARI (TABII İSİM ARAMA) ---
         elif path == '/trt2':
-            # TRT 2 için de hibrit deniyoruz
-            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt2.*?\.m3u8.*?)[\"']"])
-            if not redirect_url: redirect_url = self.get_tabii_stream(["TRT 2"])
+            redirect_url = self.get_tabii_stream(["TRT 2"])
             if not redirect_url: redirect_url = "https://tv-trt2.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trthaber':
@@ -88,7 +95,7 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream(["tabii Spor"])
 
-        # --- 2. LİSTE OLUŞTURUCU ---
+        # --- PLAYLIST ÇIKTISI ---
         elif path == '/playlist.m3u':
             self.send_playlist()
             return
@@ -97,7 +104,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>TRT 1 Onarildi!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>TRT 1 Onarildi.</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -122,7 +129,7 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text.replace('\u002F', '/') 
             for regex in regex_list:
-                # TRT 1 için Case Insensitive (Büyük/Küçük harf duyarsız) çok önemli
+                # Case Insensitive (TRT1 i yakalamak icin onemli)
                 match = re.search(regex, content, re.IGNORECASE)
                 if match:
                     found = match.group(1).replace('\\/', '/')
@@ -137,7 +144,6 @@ class handler(BaseHTTPRequestHandler):
             url = "https://www.tabii.com/tr/watch/live/trt1?trackId=150002"
             req_headers = HEADERS.copy()
             req_headers['Referer'] = "https://www.tabii.com/"
-            
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text
             
@@ -159,7 +165,7 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # --- KANAL LİSTESİ ---
+        # Alfabetik Siralama Icin Liste
         channels = [
             ("NOW TV", "/now", "https://www.nowtv.com.tr/"),
             ("ATV", "/atv", "https://www.atv.com.tr/"),
@@ -178,7 +184,7 @@ class handler(BaseHTTPRequestHandler):
             ("tabii Spor", "/tabiispor", "https://www.tabii.com/")
         ]
 
-        # Alfabetik Siralama
+        # Listeyi Alfabetik Sirala
         channels.sort(key=lambda x: x[0])
 
         m3u = "#EXTM3U\n"
@@ -187,6 +193,7 @@ class handler(BaseHTTPRequestHandler):
             m3u += f"#EXTINF:-1,{name}\n"
             m3u += f"#EXTVLCOPT:http-user-agent={UA_STRING}\n"
             m3u += f"#EXTVLCOPT:http-referrer={ref}\n"
+            # BURASI SENİN İSTEDİĞİN ÖZEL AYARLAR
             m3u += f"#EXTVLCOPT:adaptive-max-bandwidth=2000000\n"
             m3u += f"#EXTVLCOPT:preferred-resolution=720\n"
             m3u += f"{base}{path}\n\n"
