@@ -22,35 +22,79 @@ class handler(BaseHTTPRequestHandler):
         
         # --- KANAL LİNKLERİ ---
         
-        # NOW TV
+        # 1. NOW TV (Sorunsuz)
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
         
-        # ATV (Gelişmiş Tarama)
-        elif path == '/atv':
-            redirect_url = self.get_stream("https://www.atv.com.tr/canli-yayin", "https://www.atv.com.tr/", r"[\"'](https?://.*?\.m3u8.*?)[\"']")
-            if not redirect_url: redirect_url = "https://tmgrup.daioncdn.net/atv/atv.m3u8"
-
-        # SHOW TV
+        # 2. SHOW TV (Sorunsuz)
         elif path == '/show':
             redirect_url = self.get_stream("https://www.showtv.com.tr/canli-yayin", "https://www.showtv.com.tr/", r"[\"'](https?://.*?showtv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://ciner-live.daioncdn.net/showtv/showtv.m3u8"
-            
-        # A HABER
-        elif path == '/ahaber':
-            redirect_url = self.get_stream("https://www.ahaber.com.tr/video/canli-yayin", "https://www.ahaber.com.tr/", r"[\"'](https?://.*?\.m3u8.*?)[\"']")
-            if not redirect_url: redirect_url = "https://tmgrup.daioncdn.net/ahaber/ahaber.m3u8"
 
-        # TRT 1
-        elif path == '/trt1':
-            redirect_url = self.get_stream("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']")
-            if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
-            
-        # STAR TV
+        # 3. STAR TV (Sorunsuz)
         elif path == '/star':
             redirect_url = self.get_stream("https://www.startv.com.tr/canli-yayin", "https://www.startv.com.tr/", r"[\"'](https?://.*?startv.*?\.m3u8.*?)[\"']")
             if not redirect_url: redirect_url = "https://dogus-live.daioncdn.net/startv/startv.m3u8"
 
+        # --- GÜNCELLENEN SORUNLU KANALLAR ---
+
+        # 4. ATV (Turkuvaz HTML Analizi: "VideoUrl" içinde saklı)
+        elif path == '/atv':
+            # Önce MobileVideoUrl, sonra VideoUrl, en son standart m3u8 arar
+            redirect_url = self.get_stream_multi_regex(
+                "https://www.atv.com.tr/canli-yayin", 
+                "https://www.atv.com.tr/", 
+                [
+                    r'"MobileVideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r"[\"'](https?://.*?atv.*?\.m3u8.*?)[\"']"
+                ]
+            )
+            # Yedek: Backstage sunucusu
+            if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/atv/atv.m3u8"
+
+        # 5. A HABER (Turkuvaz HTML Analizi)
+        elif path == '/ahaber':
+            redirect_url = self.get_stream_multi_regex(
+                "https://www.ahaber.com.tr/video/canli-yayin", 
+                "https://www.ahaber.com.tr/", 
+                [
+                    r'"MobileVideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r"[\"'](https?://.*?ahaber.*?\.m3u8.*?)[\"']"
+                ]
+            )
+            if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/ahaber/ahaber.m3u8"
+
+        # 6. A SPOR (Yeni Eklendi - Turkuvaz HTML Analizi)
+        elif path == '/aspor':
+            redirect_url = self.get_stream_multi_regex(
+                "https://www.aspor.com.tr/webtv/canli-yayin", 
+                "https://www.aspor.com.tr/", 
+                [
+                    r'"MobileVideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r"[\"'](https?://.*?aspor.*?\.m3u8.*?)[\"']"
+                ]
+            )
+            if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/aspor/aspor.m3u8"
+
+        # 7. TRT 1 (Tabii HTML Analizi: JSON içindeki 'hls' veya 'url' tagi)
+        elif path == '/trt1':
+            # Tabii.com yapısı çok dinamik, JSON içindeki "hls" anahtarını hedefliyoruz.
+            redirect_url = self.get_stream_multi_regex(
+                "https://www.tabii.com/tr/watch/live/trt1?trackId=150002", 
+                "https://www.tabii.com/", 
+                [
+                    r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r'"url"\s*:\s*"(https?://.*?\.m3u8.*?)"',
+                    r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']"
+                ]
+            )
+            # Eğer Tabii HTML'den çıkmazsa, TRT İzle'nin eski ama sağlam API'sine bakarız
+            if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
+
+        # --- PLAYLIST ---
         elif path == '/playlist.m3u':
             self.send_playlist()
             return
@@ -59,7 +103,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>Bitrate Limiti: 2.0 Mbps (Stabil)</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>Turkuvaz + TRT Yamasi Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -74,17 +118,28 @@ class handler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, "Link Bulunamadi")
 
+    # --- TEKİL REGEX FONKSİYONU ---
     def get_stream(self, url, referer, regex):
+        return self.get_stream_multi_regex(url, referer, [regex])
+
+    # --- ÇOKLU REGEX FONKSİYONU (YENİ GÜÇLENDİRİLMİŞ TARAMA) ---
+    def get_stream_multi_regex(self, url, referer, regex_list):
         try:
             req_headers = HEADERS.copy()
             req_headers['Referer'] = referer
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
-            match = re.search(regex, r.text)
-            if match:
-                found_url = match.group(1).replace('\\/', '/')
-                if found_url.startswith("http://"):
-                    found_url = found_url.replace("http://", "https://")
-                return found_url
+            
+            # HTML içindeki JSON karakterlerini düzelt (Unicode kaçışları temizle)
+            content = r.text.replace('\u002F', '/') 
+            
+            for regex in regex_list:
+                match = re.search(regex, content)
+                if match:
+                    found_url = match.group(1).replace('\\/', '/')
+                    # HTTP -> HTTPS Zorlaması (Güvenlik hatasını önler)
+                    if found_url.startswith("http://"):
+                        found_url = found_url.replace("http://", "https://")
+                    return found_url
         except:
             pass
         return None
@@ -94,10 +149,7 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # --- BİTRATE AYARI (2.0 Mbps) ---
-        # 2000000 bps = 2.0 Mbps
-        # Bu ayar 720p'nin alt sınırıdır.
-        # İnternet yavaşlasa bile donmaz, sadece görüntü hafif bulanıklaşır ama ses gitmez.
+        # BITRATE: 2.0 Mbps (Stabilite Garantili)
         
         m3u = f"""#EXTM3U
 #EXTINF:-1 group-title="Ulusal",NOW TV
@@ -107,7 +159,7 @@ class handler(BaseHTTPRequestHandler):
 #EXTVLCOPT:preferred-resolution=720
 {base}/now
 
-#EXTINF:-1 group-title="Ulusal",ATV
+#EXTINF:-1 group-title="Ulusal",ATV (Yeni)
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.atv.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
@@ -128,16 +180,23 @@ class handler(BaseHTTPRequestHandler):
 #EXTVLCOPT:preferred-resolution=720
 {base}/star
 
-#EXTINF:-1 group-title="Haber",A Haber
+#EXTINF:-1 group-title="Haber",A Haber (Yeni)
 #EXTVLCOPT:http-user-agent={UA_STRING}
 #EXTVLCOPT:http-referrer=https://www.ahaber.com.tr/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/ahaber
 
-#EXTINF:-1 group-title="Ulusal",TRT 1
+#EXTINF:-1 group-title="Spor",A Spor (Yeni)
 #EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.trt.com.tr/
+#EXTVLCOPT:http-referrer=https://www.aspor.com.tr/
+#EXTVLCOPT:adaptive-max-bandwidth=2000000
+#EXTVLCOPT:preferred-resolution=720
+{base}/aspor
+
+#EXTINF:-1 group-title="Ulusal",TRT 1 (Tabii)
+#EXTVLCOPT:http-user-agent={UA_STRING}
+#EXTVLCOPT:http-referrer=https://www.tabii.com/
 #EXTVLCOPT:adaptive-max-bandwidth=2000000
 #EXTVLCOPT:preferred-resolution=720
 {base}/trt1
