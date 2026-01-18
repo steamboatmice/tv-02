@@ -19,7 +19,7 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         redirect_url = None
         
-        # --- 1. YAYIN MOTORU (Kanal Linklerini Bulur) ---
+        # --- 1. YAYIN MOTORU ---
         
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
@@ -39,11 +39,15 @@ class handler(BaseHTTPRequestHandler):
             redirect_url = self.get_stream_multi_regex("https://www.aspor.com.tr/webtv/canli-yayin", "https://www.aspor.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?aspor.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/aspor/aspor.m3u8"
 
-        # --- TRT AİLESİ ---
+        # --- TRT AİLESİ (TRT 1 GÜÇLENDİRİLDİ) ---
 
         elif path == '/trt1':
-            # TRT 1 (Garantili Yöntem)
-            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'])
+            # 1. Önce Tabii sisteminden ismen iste (En temizi)
+            redirect_url = self.get_tabii_stream(["TRT 1"])
+            # 2. Bulamazsa Linkin içinde "trt1" veya "master" geçen herhangi bir m3u8'i yakala (Agresif Mod)
+            if not redirect_url: 
+                redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", r"[\"'](https?://.*?master.*?\.m3u8.*?)[\"']"])
+            # 3. Hiçbiri olmazsa yedek
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trt2':
@@ -77,7 +81,7 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream(["tabii Spor"])
 
-        # --- 2. LİSTE OLUŞTURUCU (Sıralama Burada Yapılıyor) ---
+        # --- 2. LİSTE OLUŞTURUCU ---
         elif path == '/playlist.m3u':
             self.send_playlist()
             return
@@ -86,7 +90,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>Otomatik Siralama Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>TRT 1 Onarildi + Alfabetik Liste!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -111,7 +115,6 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text.replace('\u002F', '/') 
             for regex in regex_list:
-                # TRT 1 Fix (IGNORECASE aktif)
                 match = re.search(regex, content, re.IGNORECASE)
                 if match:
                     found = match.group(1).replace('\\/', '/')
@@ -148,10 +151,7 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # --- KANAL LİSTESİ VERİTABANI ---
-        # Buraya eklenen her kanal otomatik siralanir.
-        # Format: ("Görünen İsim", "/adres", "Referer Linki")
-        
+        # --- KANAL VERİTABANI ---
         channels = [
             ("NOW TV", "/now", "https://www.nowtv.com.tr/"),
             ("ATV", "/atv", "https://www.atv.com.tr/"),
@@ -170,17 +170,16 @@ class handler(BaseHTTPRequestHandler):
             ("tabii Spor", "/tabiispor", "https://www.tabii.com/")
         ]
 
-        # --- OTOMATİK SIRALAMA ---
-        # Listeyi isme göre (x[0]) alfabetik sirala
+        # Otomatik Alfabetik Siralama
         channels.sort(key=lambda x: x[0])
 
-        # M3U OLUŞTURMA
         m3u = "#EXTM3U\n"
         
         for name, path, ref in channels:
             m3u += f"#EXTINF:-1,{name}\n"
             m3u += f"#EXTVLCOPT:http-user-agent={UA_STRING}\n"
             m3u += f"#EXTVLCOPT:http-referrer={ref}\n"
+            # 2.0 Mbps (720p Garantili) Hız Limiti BURADA AKTİF
             m3u += f"#EXTVLCOPT:adaptive-max-bandwidth=2000000\n"
             m3u += f"#EXTVLCOPT:preferred-resolution=720\n"
             m3u += f"{base}{path}\n\n"
