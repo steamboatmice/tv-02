@@ -19,7 +19,7 @@ class handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         redirect_url = None
         
-        # --- KANAL LİNKLERİ (Hibrit Motor: Regex + Split) ---
+        # --- 1. YAYIN MOTORU (Kanal Linklerini Bulur) ---
         
         if path == '/now':
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
@@ -42,6 +42,7 @@ class handler(BaseHTTPRequestHandler):
         # --- TRT AİLESİ ---
 
         elif path == '/trt1':
+            # TRT 1 (Garantili Yöntem)
             redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'])
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
 
@@ -76,7 +77,7 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream(["tabii Spor"])
 
-        # --- OYNATMA LISTESI ---
+        # --- 2. LİSTE OLUŞTURUCU (Sıralama Burada Yapılıyor) ---
         elif path == '/playlist.m3u':
             self.send_playlist()
             return
@@ -85,7 +86,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>Liste Hazir (Kategorisiz)!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>Otomatik Siralama Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -110,7 +111,8 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text.replace('\u002F', '/') 
             for regex in regex_list:
-                match = re.search(regex, content)
+                # TRT 1 Fix (IGNORECASE aktif)
+                match = re.search(regex, content, re.IGNORECASE)
                 if match:
                     found = match.group(1).replace('\\/', '/')
                     if found.startswith("http://"): found = found.replace("http://", "https://")
@@ -146,113 +148,43 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # Kategoriler (group-title) kaldirildi. Sadece isimler kaldi.
-        m3u = f"""#EXTM3U
-#EXTINF:-1,NOW TV
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.nowtv.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/now
+        # --- KANAL LİSTESİ VERİTABANI ---
+        # Buraya eklenen her kanal otomatik siralanir.
+        # Format: ("Görünen İsim", "/adres", "Referer Linki")
+        
+        channels = [
+            ("NOW TV", "/now", "https://www.nowtv.com.tr/"),
+            ("ATV", "/atv", "https://www.atv.com.tr/"),
+            ("Show TV", "/show", "https://www.showtv.com.tr/"),
+            ("Star TV", "/star", "https://www.startv.com.tr/"),
+            ("A Haber", "/ahaber", "https://www.ahaber.com.tr/"),
+            ("A Spor", "/aspor", "https://www.aspor.com.tr/"),
+            ("TRT 1", "/trt1", "https://www.tabii.com/"),
+            ("TRT 2", "/trt2", "https://www.tabii.com/"),
+            ("TRT Haber", "/trthaber", "https://www.tabii.com/"),
+            ("TRT Spor", "/trtspor", "https://www.tabii.com/"),
+            ("TRT Spor Yıldız", "/trtsporyildiz", "https://www.tabii.com/"),
+            ("TRT Belgesel", "/trtbelgesel", "https://www.tabii.com/"),
+            ("TRT Çocuk", "/trtcocuk", "https://www.tabii.com/"),
+            ("TRT Müzik", "/trtmuzik", "https://www.tabii.com/"),
+            ("tabii Spor", "/tabiispor", "https://www.tabii.com/")
+        ]
 
-#EXTINF:-1,ATV
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.atv.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/atv
+        # --- OTOMATİK SIRALAMA ---
+        # Listeyi isme göre (x[0]) alfabetik sirala
+        channels.sort(key=lambda x: x[0])
 
-#EXTINF:-1,Show TV
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.showtv.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/show
+        # M3U OLUŞTURMA
+        m3u = "#EXTM3U\n"
+        
+        for name, path, ref in channels:
+            m3u += f"#EXTINF:-1,{name}\n"
+            m3u += f"#EXTVLCOPT:http-user-agent={UA_STRING}\n"
+            m3u += f"#EXTVLCOPT:http-referrer={ref}\n"
+            m3u += f"#EXTVLCOPT:adaptive-max-bandwidth=2000000\n"
+            m3u += f"#EXTVLCOPT:preferred-resolution=720\n"
+            m3u += f"{base}{path}\n\n"
 
-#EXTINF:-1,Star TV
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.startv.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/star
-
-#EXTINF:-1,TRT 1
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trt1
-
-#EXTINF:-1,TRT 2
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trt2
-
-#EXTINF:-1,TRT Haber
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trthaber
-
-#EXTINF:-1,A Haber
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.ahaber.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/ahaber
-
-#EXTINF:-1,A Spor
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.aspor.com.tr/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/aspor
-
-#EXTINF:-1,TRT Spor
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtspor
-
-#EXTINF:-1,TRT Spor Yildiz
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtsporyildiz
-
-#EXTINF:-1,tabii Spor
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/tabiispor
-
-#EXTINF:-1,TRT Belgesel
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtbelgesel
-
-#EXTINF:-1,TRT Cocuk
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtcocuk
-
-#EXTINF:-1,TRT Muzik
-#EXTVLCOPT:http-user-agent={UA_STRING}
-#EXTVLCOPT:http-referrer=https://www.tabii.com/
-#EXTVLCOPT:adaptive-max-bandwidth=2000000
-#EXTVLCOPT:preferred-resolution=720
-{base}/trtmuzik
-"""
         self.send_response(200)
         self.send_header('Content-type', 'audio/x-mpegurl')
         self.end_headers()
