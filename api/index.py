@@ -64,9 +64,9 @@ class handler(BaseHTTPRequestHandler):
             redirect_url = self.get_tabii_stream(["TRT Çocuk"])
             if not redirect_url: redirect_url = "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
             
-        # DÜZELTME: Diyanet Çocuk için farklı varyasyonlar deneniyor
         elif path == '/trtdiyanetcocuk':
-            redirect_url = self.get_tabii_stream(["TRT Diyanet Çocuk", "Diyanet Çocuk", "TRT Diyanet"])
+            # Dosyada "TRT Diyanet Çocuk" olarak geçiyor.
+            redirect_url = self.get_tabii_stream(["TRT Diyanet Çocuk", "Diyanet Çocuk"])
             if not redirect_url: redirect_url = "https://tv-trtdiyanet.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trtbelgesel':
@@ -76,11 +76,6 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/trtmuzik':
             redirect_url = self.get_tabii_stream(["TRT Müzik"])
             if not redirect_url: redirect_url = "https://tv-trtmuzik.medya.trt.com.tr/master.m3u8"
-            
-        # DÜZELTME: EBA için İlkokul/Ortaokul varyasyonları eklendi
-        elif path == '/trteba':
-            redirect_url = self.get_tabii_stream(["TRT EBA İlkokul", "TRT EBA Ortaokul", "TRT EBA", "EBA"])
-            if not redirect_url: redirect_url = "https://tv-trtebailkokul.medya.trt.com.tr/master.m3u8"
 
         elif path == '/tabiispor':
             redirect_url = self.get_tabii_stream(["tabii Spor"])
