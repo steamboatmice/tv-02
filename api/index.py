@@ -2,7 +2,6 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse
 import requests
 import re
-import json
 
 # --- AYARLAR ---
 TIMEOUT = 12
@@ -39,27 +38,28 @@ class handler(BaseHTTPRequestHandler):
             redirect_url = self.get_stream_multi_regex("https://www.aspor.com.tr/webtv/canli-yayin", "https://www.aspor.com.tr/", [r'"VideoUrl"\s*:\s*"(https?://.*?\.m3u8.*?)"', r"[\"'](https?://.*?aspor.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://trkvz-live.daioncdn.net/aspor/aspor.m3u8"
 
-        # --- TRT AİLESİ (TABİİ) ---
-        # HTML dosyasındaki tam isimlere göre güncellendi.
+        # --- TRT AİLESİ (ONARILDI) ---
 
         elif path == '/trt1':
-            redirect_url = self.get_tabii_stream(["TRT 1"])
+            # ÖNCEKİ SAĞLAM YÖNTEM: Linkin içinde "trt1" yazısını arar. En garantisi budur.
+            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt1.*?\.m3u8.*?)[\"']", r'"hls"\s*:\s*"(https?://.*?\.m3u8.*?)"'])
             if not redirect_url: redirect_url = "https://tv-trt1.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trt2':
-            redirect_url = self.get_tabii_stream(["TRT 2"])
+            # TRT 2 için de isme değil linke bakarız
+            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trt2.*?\.m3u8.*?)[\"']"])
+            if not redirect_url: redirect_url = self.get_tabii_stream(["TRT 2"])
             if not redirect_url: redirect_url = "https://tv-trt2.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trthaber':
-            redirect_url = self.get_tabii_stream(["TRT Haber"])
+            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trthaber.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://tv-trthaber.medya.trt.com.tr/master.m3u8"
 
         elif path == '/trtspor':
-            redirect_url = self.get_tabii_stream(["TRT Spor"])
+            redirect_url = self.get_stream_multi_regex("https://www.tabii.com/tr/watch/live/trt1?trackId=150002", "https://www.tabii.com/", [r"[\"'](https?://.*?trtspor1.*?\.m3u8.*?)[\"']"])
             if not redirect_url: redirect_url = "https://tv-trtspor1.medya.trt.com.tr/master.m3u8"
         
         elif path == '/trtsporyildiz':
-            # Dosyada "TRT Spor Yıldız" olarak geçiyor.
             redirect_url = self.get_tabii_stream(["TRT Spor Yıldız", "TRT Spor 2"])
             if not redirect_url: redirect_url = "https://tv-trtspor2.medya.trt.com.tr/master.m3u8"
 
@@ -68,7 +68,6 @@ class handler(BaseHTTPRequestHandler):
             if not redirect_url: redirect_url = "https://tv-trtcocuk.medya.trt.com.tr/master.m3u8"
             
         elif path == '/trtdiyanetcocuk':
-            # Dosyada "TRT Diyanet Çocuk" olarak geçiyor.
             redirect_url = self.get_tabii_stream(["TRT Diyanet Çocuk", "Diyanet Çocuk"])
             if not redirect_url: redirect_url = "https://tv-trtdiyanet.medya.trt.com.tr/master.m3u8"
 
@@ -81,8 +80,8 @@ class handler(BaseHTTPRequestHandler):
             if not redirect_url: redirect_url = "https://tv-trtmuzik.medya.trt.com.tr/master.m3u8"
             
         elif path == '/trteba':
-            # Dosyada İlkokul, Ortaokul ve Lise ayrı ayrı var. Sırayla dener.
-            redirect_url = self.get_tabii_stream(["TRT EBA İlkokul", "TRT EBA Ortaokul", "TRT EBA Lise"])
+            # EBA için "Split" yöntemi en iyisidir. Satır atlamayı umursamaz.
+            redirect_url = self.get_tabii_stream(["TRT EBA İlkokul", "TRT EBA Ortaokul", "TRT EBA Lise", "EBA"])
             if not redirect_url: redirect_url = "https://tv-trtebailkokul.medya.trt.com.tr/master.m3u8"
 
         elif path == '/tabiispor':
@@ -97,7 +96,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>Ayarlar Güncellendi (EBA & Diyanet Fix)!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>TRT 1 ve EBA Onarildi!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -122,7 +121,7 @@ class handler(BaseHTTPRequestHandler):
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             content = r.text.replace('\u002F', '/') 
             for regex in regex_list:
-                match = re.search(regex, content, re.IGNORECASE) # Büyük/Küçük harf duyarsız
+                match = re.search(regex, content, re.IGNORECASE)
                 if match:
                     found = match.group(1).replace('\\/', '/')
                     if found.startswith("http://"): found = found.replace("http://", "https://")
@@ -138,24 +137,28 @@ class handler(BaseHTTPRequestHandler):
             req_headers['Referer'] = "https://www.tabii.com/"
             
             r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
-            # Türkçe karakter sorunlarını çözmek için decode işlemi yapıyoruz
             content = r.text
             
-            # Kanal isimlerini sırayla ara
+            # SPLIT YÖNTEMİ (ESKİ & SAĞLAM YÖNTEM):
+            # Regex yerine sayfa metnini "Kanal Adı"ndan itibaren ikiye böleriz.
+            # Böylece satır atlama derdi olmaz, kanal adından hemen sonraki linki alırız.
+            
             for name in channel_names_list:
-                # re.IGNORECASE ile büyük/küçük harf farkını ortadan kaldırıyoruz
-                # re.escape(name) ile ismin içindeki özel karakterleri (boşluk vs) koruyoruz
-                
-                # Regex Mantığı: Kanal ismini bul, sonrasındaki JSON yapısında ilk gelen .m3u8'i yakala
-                # (?i) bayrağı case-insensitive yapar.
-                pattern = r'(?i)' + re.escape(name) + r'.*?["\'](https?://.*?\.m3u8.*?)["\']'
-                
-                match = re.search(pattern, content)
-                if match:
-                    found = match.group(1).replace('\\/', '/')
-                    return found.replace("http://", "https://")
+                # İsim sayfada var mı?
+                if name in content:
+                    # Varsa o isimden sonrasını al
+                    parts = content.split(name)
+                    if len(parts) > 1:
+                        target_area = parts[1] # İsmin sağ tarafı
+                        
+                        # İlk 1000 karakterde m3u8 ara (çok uzağa gitmesin diye)
+                        search_zone = target_area[:1000]
+                        
+                        match = re.search(r'["\'](https?://.*?\.m3u8.*?)["\']', search_zone)
+                        if match:
+                            found = match.group(1).replace('\\/', '/')
+                            return found.replace("http://", "https://")
         except Exception as e:
-            print(f"Hata: {e}")
             pass
         return None
 
