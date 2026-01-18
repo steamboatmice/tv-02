@@ -4,13 +4,19 @@ import requests
 import re
 
 # --- AYARLAR ---
-TIMEOUT = 10
-# Bu User-Agent "Ben en güncel Chrome tarayıcısıyım" der.
-UA_STRING = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+TIMEOUT = 12
 
+# KRİTİK DEĞİŞİKLİK: Kendimizi Android Telefon (Samsung S21) gibi tanıtıyoruz.
+# Bu sayede web reklam kuşağı yerine temiz mobil yayın gelecek.
+UA_STRING = "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Mobile Safari/537.36"
+
+# Headerları güçlendirdik
 HEADERS = {
     "User-Agent": UA_STRING,
-    "Referer": "https://www.google.com/"
+    "Referer": "https://www.nowtv.com.tr/",
+    "Origin": "https://www.nowtv.com.tr",
+    "Accept": "*/*",
+    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
 }
 
 class handler(BaseHTTPRequestHandler):
@@ -20,6 +26,7 @@ class handler(BaseHTTPRequestHandler):
         
         # --- KANAL MANTIĞI ---
         if path == '/now':
+            # NOW TV Mobile Check
             redirect_url = self.get_stream("https://www.nowtv.com.tr/canli-yayin", "https://www.nowtv.com.tr/", r"daionUrl\s*:\s*.*?'(https://.*?\.m3u8.*?)'")
         
         elif path == '/atv':
@@ -50,7 +57,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write("<h1>Sistem Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
+            self.wfile.write("<h1>Mobil Modu Aktif!</h1><p>Link: <a href='/playlist.m3u'>/playlist.m3u</a></p>".encode())
             return
         
         else:
@@ -67,7 +74,11 @@ class handler(BaseHTTPRequestHandler):
 
     def get_stream(self, url, referer, regex):
         try:
-            r = requests.get(url, headers={"User-Agent": HEADERS["User-Agent"], "Referer": referer}, timeout=TIMEOUT)
+            # Headerları her istekte tazeleyerek gönderiyoruz
+            req_headers = HEADERS.copy()
+            req_headers['Referer'] = referer
+            
+            r = requests.get(url, headers=req_headers, timeout=TIMEOUT)
             match = re.search(regex, r.text)
             if match:
                 return match.group(1).replace('\\/', '/')
@@ -80,8 +91,7 @@ class handler(BaseHTTPRequestHandler):
         protocol = "https" if "localhost" not in host else "http"
         base = f"{protocol}://{host}"
         
-        # VLC ve Akıllı TV'ler için "Kimlik Bilgisi" (EXTVLCOPT) ekliyoruz
-        # Bu satırlar oynatıcıya "Videoyu çekerken bu kimliği kullan" der.
+        # VLC'ye de "Sen bir Android telefonsun" diyoruz.
         m3u = f"""#EXTM3U
 #EXTINF:-1 group-title="Ulusal",NOW TV
 #EXTVLCOPT:http-user-agent={UA_STRING}
@@ -114,6 +124,6 @@ class handler(BaseHTTPRequestHandler):
 {base}/trt1
 """
         self.send_response(200)
-        self.send_header('Content-type', 'audio/x-mpegurl') # Dosya türünü M3U olarak tanıttık
+        self.send_header('Content-type', 'audio/x-mpegurl')
         self.end_headers()
         self.wfile.write(m3u.encode('utf-8'))
